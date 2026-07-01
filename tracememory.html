@@ -1,1 +1,1272 @@
-see below
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TraceMemory — Agent Continuity Infrastructure</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  .mono { font-family: 'Geist Mono', monospace; }
+  .gradient-hero { background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124,58,237,0.18) 0%, transparent 70%), #0a0a0a; }
+  .border-violet-top { border-top: 2px solid #7c3aed; }
+  .border-green-left { border-left: 3px solid #16a34a; }
+  .border-amber-left { border-left: 3px solid #d97706; }
+  .border-blue-left { border-left: 3px solid #2563eb; }
+  .border-violet-left { border-left: 3px solid #7c3aed; }
+  @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+  .slide-in { animation: slideIn 0.25s ease-out; }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+  pre { white-space: pre-wrap; word-break: break-all; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #111; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: { violet: { 600: '#7c3aed', 700: '#6d28d9' } }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-white text-neutral-900 antialiased">
+
+<div id="app"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let page = 'home';
+let signedIn = false;
+let demoStep = 0;
+let inspectorOpen = false;
+let scenario = 'Support';
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+function nav(p) {
+  page = p;
+  demoStep = 0;
+  inspectorOpen = false;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function login() {
+  signedIn = true;
+  page = 'console';
+  render();
+  window.scrollTo(0, 0);
+}
+
+function logout() {
+  signedIn = false;
+  page = 'home';
+  render();
+  window.scrollTo(0, 0);
+}
+
+function advanceStage() {
+  if (demoStep < 5) {
+    demoStep++;
+    render();
+    setTimeout(() => {
+      const chat = document.getElementById('chat-area');
+      if (chat) chat.scrollTop = chat.scrollHeight;
+    }, 50);
+  }
+}
+
+function pickScenario(s) {
+  scenario = s;
+  demoStep = 0;
+  render();
+}
+
+function toggleInspector() {
+  inspectorOpen = !inspectorOpen;
+  render();
+}
+
+// ─── Components ──────────────────────────────────────────────────────────────
+function logo() {
+  return `<span class="flex items-center gap-2 cursor-pointer" onclick="nav('home')">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <rect width="24" height="24" rx="5" fill="#7c3aed"/>
+      <path d="M6 8h12M6 12h8M6 16h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="18" cy="12" r="2.5" fill="#a78bfa"/>
+    </svg>
+    <span class="font-bold text-lg tracking-tight">TraceMemory</span>
+  </span>`;
+}
+
+function badge(text, color) {
+  const map = {
+    green: 'bg-green-100 text-green-700',
+    amber: 'bg-amber-100 text-amber-700',
+    red: 'bg-red-100 text-red-700',
+    violet: 'bg-violet-100 text-violet-700',
+    blue: 'bg-blue-100 text-blue-700',
+    gray: 'bg-neutral-100 text-neutral-600',
+    dark: 'bg-neutral-800 text-neutral-300',
+  };
+  return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${map[color]||map.gray}">${text}</span>`;
+}
+
+function header(activePage) {
+  const links = [
+    ['Capabilities','capabilities'],
+    ['Architecture','architecture'],
+    ['Solutions','solutions'],
+    ['Developers','developers'],
+    ['Integrations','integrations'],
+  ];
+  const navLinks = links.map(([l,p]) =>
+    `<a href="#" onclick="nav('${p}');return false;" class="text-sm font-medium ${activePage===p?'text-violet-600':'text-neutral-500 hover:text-neutral-900'} transition-colors">${l}</a>`
+  ).join('');
+  const rightArea = signedIn
+    ? `<a href="#" onclick="nav('console');return false;" class="text-sm font-medium text-violet-600 hover:text-violet-700">Console</a>
+       <button onclick="logout()" class="text-sm font-medium text-neutral-500 hover:text-neutral-800">Sign out</button>`
+    : `<a href="#" onclick="login();return false;" class="text-sm font-medium text-neutral-600 hover:text-neutral-900">Sign in</a>
+       <button onclick="nav('agent')" class="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Run Demo</button>`;
+
+  return `<header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-neutral-100">
+    <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-8">
+      ${logo()}
+      <nav class="hidden md:flex items-center gap-6">${navLinks}</nav>
+      <div class="flex items-center gap-4">${rightArea}</div>
+    </div>
+  </header>`;
+}
+
+// ─── Home ─────────────────────────────────────────────────────────────────────
+function home() {
+  return `
+${header('home')}
+
+<!-- Hero -->
+<section class="gradient-hero text-white py-24 px-6">
+  <div class="max-w-5xl mx-auto text-center">
+    <div class="flex items-center justify-center gap-3 mb-6">
+      <span class="text-xs font-bold tracking-widest text-violet-400 uppercase">RAISE Hackathon × Vultr</span>
+      <span class="text-neutral-500">|</span>
+      <span class="flex items-center gap-1.5 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1l1.3 2.8 3 .4-2.2 2.1.5 3L6 8l-2.6 1.3.5-3L1.7 4.2l3-.4z" fill="#a78bfa"/></svg>
+        Open Source
+      </span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6 max-w-4xl mx-auto">
+      Your agents fail silently, wander off-task, and leave no proof they ran correctly.
+    </h1>
+    <p class="text-lg text-neutral-300 max-w-2xl mx-auto mb-10">
+      TraceMemory fixes all three — recovery, drift detection, and cryptographic receipts for any agent, any vendor. No lock-in. No rewrite.
+    </p>
+    <div class="flex flex-wrap items-center justify-center gap-4 mb-10">
+      <button onclick="nav('agent')" class="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors">See drift detection live</button>
+      <a href="https://github.com" target="_blank" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold px-6 py-3 rounded-lg transition-colors">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+    <div class="flex flex-col items-center gap-2 text-sm text-neutral-400">
+      <span>✦ Works above OpenAI, Anthropic, or any other vendor</span>
+      <span>✦ Run fully self-hosted for sensitive data, or managed in the cloud — same engine, on any PostgreSQL.</span>
+    </div>
+  </div>
+
+  <!-- Console Widget -->
+  <div class="max-w-4xl mx-auto mt-16 bg-neutral-900 rounded-2xl border border-neutral-700 overflow-hidden shadow-2xl">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-700 bg-neutral-950">
+      <div class="flex items-center gap-2">
+        <div class="flex gap-1.5"><div class="w-3 h-3 rounded-full bg-red-500"></div><div class="w-3 h-3 rounded-full bg-yellow-500"></div><div class="w-3 h-3 rounded-full bg-green-500"></div></div>
+        <span class="text-sm font-semibold text-white ml-2">TraceMemory Console</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="pulse-dot w-2 h-2 bg-green-400 rounded-full inline-block"></span>
+        <span class="text-xs text-green-400 font-semibold">LIVE</span>
+        <span class="mono text-xs text-neutral-500 ml-3">trace-id: tm-7f2a91c9</span>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-neutral-700">
+      <div class="p-5">
+        <div class="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">Active Traces</div>
+        <table class="w-full text-sm">
+          <thead><tr class="text-xs text-neutral-500 border-b border-neutral-700"><th class="text-left pb-2">ID</th><th class="text-left pb-2">Status</th><th class="text-left pb-2">Steps</th><th class="text-left pb-2">Age</th></tr></thead>
+          <tbody class="divide-y divide-neutral-800">
+            <tr class="py-2">
+              <td class="py-2 mono text-violet-400 text-xs">tm-7f2a91c9</td>
+              <td class="py-2">${badge('RUNNING','green')}</td>
+              <td class="py-2 text-neutral-300">12</td>
+              <td class="py-2 text-neutral-500">12s ago</td>
+            </tr>
+            <tr>
+              <td class="py-2 mono text-violet-400 text-xs">tm-3b44c0d2</td>
+              <td class="py-2">${badge('RECOVERED','blue')}</td>
+              <td class="py-2 text-neutral-300">8</td>
+              <td class="py-2 text-neutral-500">1m ago</td>
+            </tr>
+            <tr>
+              <td class="py-2 mono text-violet-400 text-xs">tm-9e1a7f3b</td>
+              <td class="py-2">${badge('COMPLETED','gray')}</td>
+              <td class="py-2 text-neutral-300">14</td>
+              <td class="py-2 text-neutral-500">6m ago</td>
+            </tr>
+            <tr>
+              <td class="py-2 mono text-violet-400 text-xs">tm-1c6d8a2f</td>
+              <td class="py-2">${badge('FLAGGED','red')}</td>
+              <td class="py-2 text-neutral-300">3</td>
+              <td class="py-2 text-neutral-500">18s ago</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="mt-3">
+          <div class="flex justify-between text-xs text-neutral-500 mb-1"><span>tm-7f2a91c9</span><span>Running…</span></div>
+          <div class="w-full bg-neutral-800 rounded-full h-1.5"><div class="bg-violet-600 h-1.5 rounded-full" style="width:64%"></div></div>
+        </div>
+      </div>
+      <div class="p-5 space-y-5">
+        <div>
+          <div class="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Last Drift Check</div>
+          <div class="flex items-center gap-2 mb-2">${badge('PASS','green')}</div>
+          <div class="text-xs text-neutral-400">Action: <span class="text-neutral-200">fetch_customer_data</span></div>
+          <div class="text-xs text-neutral-400 mt-1">Scope: <span class="text-neutral-200 mono">billing_read_only</span></div>
+        </div>
+        <div class="border-t border-neutral-700 pt-4">
+          <div class="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Latest Receipt</div>
+          <div class="flex items-center gap-2 mb-2">${badge('VERIFIED','green')}</div>
+          <div class="text-xs text-neutral-400">Signature: <span class="mono text-neutral-200">7p9Zx...Ed25519</span></div>
+          <div class="text-xs text-neutral-400 mt-1">Checkpoints: <span class="text-neutral-200">14</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Four Pillars -->
+<section class="py-24 px-6 bg-white">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Four pillars of agent continuity</h2>
+      <p class="text-neutral-500 max-w-xl mx-auto">Every capability maps to a real failure mode in production agent systems.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      ${
+        [
+          ['01','Recoverable','Agents checkpoint state at every significant step. When a provider fails, rate-limits, or times out, the run resumes — not restarts.'],
+          ['02','On-task','A task contract captures intent before execution. Drift detection catches scope creep and misaligned actions before they cause downstream damage.'],
+          ['03','Provable','Every completed run produces a signed, offline-verifiable receipt. Ed25519 signatures over the event chain. No trust required.'],
+          ['04','Self-improving','Reflection and curated lessons feed a retrieval layer. Future runs benefit from past failures — automatically.'],
+        ].map(([n,t,d]) => `
+        <div class="border-violet-top border border-neutral-100 rounded-xl p-6 hover:shadow-md transition-shadow">
+          <div class="text-xs font-bold text-violet-600 tracking-widest mb-3">${n}</div>
+          <div class="font-bold text-lg mb-2">${t}</div>
+          <div class="text-sm text-neutral-500 leading-relaxed">${d}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+</section>
+
+<!-- Pipeline -->
+<section class="py-24 px-6 bg-neutral-50">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold mb-4">The full continuity loop</h2>
+      <p class="text-neutral-500 max-w-xl mx-auto">From task intake to signed receipt — every step tracked, every failure handled.</p>
+    </div>
+    <div class="space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        ${[['01','Task contract','Intent captured before execution','neutral'],['02','Tool traces','Every call logged with inputs/outputs','neutral'],['03','Checkpoint','State snapshotted at each milestone','neutral'],['04','Drift check','Scope verified against contract','neutral']].map(([n,t,d,c]) => `
+          <div class="bg-white rounded-xl border border-neutral-200 p-5 relative">
+            <div class="text-xs font-bold text-neutral-400 mb-1">${n}</div>
+            <div class="font-semibold text-sm mb-1">${t}</div>
+            <div class="text-xs text-neutral-500">${d}</div>
+          </div>`).join('')}
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        ${[['05','Failure','Provider error / timeout / bad output','orange'],['06','Restore','Resume from last clean checkpoint','green'],['07','Lesson learned','Reflection stored to memory layer','neutral'],['08','Signed receipt','Ed25519 receipt for audit','neutral']].map(([n,t,d,c]) => `
+          <div class="bg-white rounded-xl border ${c==='orange'?'border-orange-200':c==='green'?'border-green-200':'border-neutral-200'} p-5">
+            <div class="text-xs font-bold ${c==='orange'?'text-orange-500':c==='green'?'text-green-600':'text-neutral-400'} mb-1">${n}</div>
+            <div class="font-semibold text-sm mb-1">${t}</div>
+            <div class="text-xs text-neutral-500">${d}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="mt-8 bg-violet-50 border border-violet-200 rounded-xl p-6 text-center">
+      <p class="text-violet-800 font-semibold">Observability shows what happened after failure. TraceMemory keeps the run recoverable.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Demo callout -->
+<section class="py-24 px-6 bg-neutral-950">
+  <div class="max-w-4xl mx-auto">
+    <div class="text-center mb-8">
+      <div class="inline-block bg-white/10 text-white text-xs font-bold px-3 py-1 rounded-full mb-4">One click. No keys.</div>
+      <h2 class="text-3xl font-bold text-white mb-4">Run the full demo locally</h2>
+      <p class="text-neutral-400 max-w-xl mx-auto">The reference app boots a complete TraceMemory runtime with a support-agent scenario wired up. Watch recovery, drift detection, and signed receipts in action.</p>
+    </div>
+    <div class="bg-neutral-900 rounded-xl border border-neutral-700 p-6 mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-2 h-2 rounded-full bg-green-400"></span>
+        <span class="text-xs text-neutral-400 mono">terminal</span>
+      </div>
+      <pre class="mono text-sm text-green-400">git clone https://github.com/tracememory/demo
+cd demo
+docker compose up --build</pre>
+    </div>
+    <div class="flex flex-wrap justify-center gap-3 mb-8">
+      ${['NO_API_KEYS','FULLY_LOCAL','POSTGRES_INCLUDED'].map(b => `<span class="mono text-xs bg-neutral-800 text-neutral-300 px-3 py-1.5 rounded-full border border-neutral-700">${b}</span>`).join('')}
+    </div>
+    <div class="text-center">
+      <button onclick="nav('agent')" class="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-8 py-3 rounded-lg transition-colors">Launch Local Demo</button>
+    </div>
+  </div>
+</section>
+
+<!-- SDK -->
+<section class="py-24 px-6 bg-white">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+      <div class="bg-neutral-950 rounded-xl border border-neutral-800 p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="w-2 h-2 rounded-full bg-green-400"></span>
+          <span class="mono text-xs text-neutral-400">python · quickstart.py</span>
+        </div>
+        <pre class="mono text-xs text-neutral-300 leading-relaxed">import tracememory as tm
+
+# Wrap any existing agent call
+@tm.trace(contract={
+    "goal": "resolve_support_ticket",
+    "allowed_tools": ["read_ticket", "update_crm"],
+    "scope": "billing_read_only"
+})
+async def handle_ticket(ticket_id: str):
+    # Your existing agent logic
+    result = await agent.run(ticket_id)
+    return result
+
+# TraceMemory adds:
+# ✓ Automatic checkpointing
+# ✓ Drift detection on every tool call
+# ✓ Recovery on provider failure
+# ✓ Signed receipt on completion</pre>
+      </div>
+      <div>
+        <h2 class="text-3xl font-bold mb-4">Integrated in minutes</h2>
+        <p class="text-neutral-500 mb-6">A single decorator wraps your existing agent. TraceMemory observes execution, manages checkpoints, and intercepts failures without changing your logic.</p>
+        <ul class="space-y-3">
+          ${['Python SDK — pip install tracememory','TypeScript SDK — npm install @tracememory/sdk','OpenClaw integration — native plugin','MCP tool gateway — drop-in proxy','REST API — language-agnostic'].map(s => `
+            <li class="flex items-start gap-3">
+              <svg class="mt-0.5 flex-shrink-0 w-5 h-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span class="text-sm">${s}</span>
+            </li>`).join('')}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Signed receipts -->
+<section class="py-24 px-6 bg-neutral-50">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold mb-4">A receipt you can verify yourself, offline.</h2>
+      <p class="text-neutral-500 max-w-xl mx-auto">Every run produces an Ed25519-signed receipt over the complete event chain. No server required for verification.</p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div class="bg-neutral-950 rounded-xl border border-neutral-800 p-6">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="mono text-xs text-neutral-400">verify.py</span>
+        </div>
+        <pre class="mono text-xs text-neutral-300 leading-relaxed">from tracememory.receipts import verify
+
+with open("receipt.json") as f:
+    receipt = json.load(f)
+
+result = verify(
+    receipt=receipt,
+    public_key_url=
+      "https://api.tracememory.io/receipts/public-key"
+)
+
+print(result.valid)       # True
+print(result.trace_id)    # tm-9e1a7f3b
+print(result.checkpoints) # 14
+print(result.outcome)     # COMPLETED</pre>
+      </div>
+      <div class="bg-white border border-neutral-200 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-semibold">Receipt</span>
+          ${badge('VALID','green')}
+        </div>
+        <div class="space-y-3 text-sm">
+          ${[['Trace ID','tm-9e1a7f3b'],['Algorithm','Ed25519'],['Checkpoints','14'],['Outcome','COMPLETED'],['Timestamp','2025-01-15T14:32:07Z'],['Signature','7p9ZxKmN...Ed25519 (truncated)']].map(([k,v]) => `
+            <div class="flex justify-between border-b border-neutral-100 pb-2">
+              <span class="text-neutral-500">${k}</span>
+              <span class="mono text-xs font-medium">${v}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Stay on task -->
+<section class="py-24 px-6 bg-white">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+      <div>
+        <div class="text-xs font-bold text-violet-600 uppercase tracking-widest mb-3">Drift Detection</div>
+        <h2 class="text-3xl font-bold mb-4">Stay on task</h2>
+        <p class="text-neutral-500 mb-6">Task contracts define what an agent is allowed to do before it starts. Every tool call is checked against the contract. Violations are flagged and halted before damage is done.</p>
+        <div class="space-y-3">
+          ${[['Task contracts','Declared intent, scope, and allowed tools'],['Real-time checking','Every tool call validated against contract'],['Automatic halt','Violations stopped before downstream calls'],['Audit trail','All flags recorded with context']].map(([t,d]) => `
+            <div class="flex gap-3">
+              <div class="w-1.5 h-1.5 bg-violet-600 rounded-full mt-2 flex-shrink-0"></div>
+              <div><span class="font-semibold text-sm">${t}</span> — <span class="text-sm text-neutral-500">${d}</span></div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="bg-neutral-950 rounded-xl border border-neutral-800 p-6 space-y-3">
+        <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-700">
+          <div class="text-xs font-bold text-neutral-400 mb-2">TASK_CONTRACT</div>
+          <div class="mono text-xs text-neutral-300">goal: resolve_billing_dispute<br>scope: billing_read_only<br>allowed: [read_invoice, update_ticket]</div>
+        </div>
+        <div class="flex justify-center text-neutral-600">↓</div>
+        <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-700">
+          <div class="text-xs font-bold text-neutral-400 mb-2">AGENT_ACTION</div>
+          <div class="mono text-xs text-red-400">tool: update_payment_method<br>scope: billing_write ← VIOLATION</div>
+        </div>
+        <div class="flex justify-center text-neutral-600">↓</div>
+        <div class="bg-red-950 rounded-lg p-4 border border-red-800">
+          <div class="text-xs font-bold text-red-400 mb-1">FLAGGED: DRIFT DETECTED</div>
+          <div class="mono text-xs text-red-300">Action halted. Trace flagged. Operator notified.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Self-improving -->
+<section class="py-24 px-6 bg-neutral-50">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-12">
+      <div class="text-xs font-bold text-violet-600 uppercase tracking-widest mb-3">Memory Layer</div>
+      <h2 class="text-3xl font-bold mb-4">Self-improving agents</h2>
+      <p class="text-neutral-500 max-w-xl mx-auto">Every failure becomes a lesson. Every lesson improves the next run. Automatically.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      ${[['Reflect','After every run — pass or fail — TraceMemory generates a structured reflection on what happened, what worked, and what failed.'],['Curate','Operators review and approve reflections. Approved lessons are added to the retrieval layer with confidence scores.'],['Retrieve','Before a new run, relevant lessons are retrieved and injected as context. Agents improve without retraining.']].map(([t,d]) => `
+        <div class="bg-white rounded-xl border border-neutral-200 p-6">
+          <div class="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center mb-4">
+            <div class="w-3 h-3 bg-violet-600 rounded-full"></div>
+          </div>
+          <div class="font-bold mb-2">${t}</div>
+          <div class="text-sm text-neutral-500">${d}</div>
+        </div>`).join('')}
+    </div>
+    <div class="bg-neutral-950 rounded-xl border border-neutral-700 p-6">
+      <div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3">EXAMPLE LESSON</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+        <div><div class="text-neutral-500 text-xs mb-1">Trigger pattern</div><div class="text-neutral-200">update_billing + stripe_error_429</div></div>
+        <div><div class="text-neutral-500 text-xs mb-1">Lesson</div><div class="text-neutral-200">Add exponential backoff before retry. Switch to Stripe fallback after 2 failures.</div></div>
+        <div><div class="text-neutral-500 text-xs mb-1">Applied</div><div class="text-neutral-200">47 times · <span class="text-green-400">94% success rate</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="bg-neutral-950 text-neutral-400 py-16 px-6">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+      <div>
+        <div class="flex items-center gap-2 text-white mb-3">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#7c3aed"/><path d="M6 8h12M6 12h8M6 16h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="12" r="2.5" fill="#a78bfa"/></svg>
+          <span class="font-bold">TraceMemory</span>
+        </div>
+        <p class="text-sm">Continuity infrastructure for production AI agents.</p>
+      </div>
+      <div>
+        <div class="text-white font-semibold text-sm mb-3">Product</div>
+        <div class="space-y-2 text-sm">
+          ${[['Capabilities','capabilities'],['Architecture','architecture'],['Solutions','solutions']].map(([l,p]) => `<div><a href="#" onclick="nav('${p}');return false;" class="hover:text-white transition-colors">${l}</a></div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="text-white font-semibold text-sm mb-3">Developers</div>
+        <div class="space-y-2 text-sm">
+          ${[['Documentation','developers'],['Integrations','integrations'],['API Reference','developers']].map(([l,p]) => `<div><a href="#" onclick="nav('${p}');return false;" class="hover:text-white transition-colors">${l}</a></div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="text-white font-semibold text-sm mb-3">Company</div>
+        <div class="space-y-2 text-sm">
+          <div><a href="#" class="hover:text-white transition-colors">GitHub</a></div>
+          <div><a href="#" class="hover:text-white transition-colors">Discord</a></div>
+          <div><a href="#" class="hover:text-white transition-colors">Blog</a></div>
+        </div>
+      </div>
+    </div>
+    <div class="border-t border-neutral-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+      <p class="text-xs">© 2025 TraceMemory. Open source under MIT License. RAISE Hackathon × Vultr.</p>
+      <p class="text-xs">Built for production AI agents. No lock-in.</p>
+    </div>
+  </div>
+</footer>`;
+}
+
+// ─── Capabilities ─────────────────────────────────────────────────────────────
+function capabilities() {
+  const sections = [
+    { color: 'green', title: 'Runtime continuity', items: [
+      ['Durable runs','Every run is tracked from intake to completion. Provider failures do not lose progress.'],
+      ['Checkpoints','State snapshots written at every significant step. Restore from any checkpoint.'],
+      ['Recovery engine','Automatic resume after failure. Configurable retry policy. Fallback routing.'],
+      ['Task versioning','Task contracts versioned independently. Roll forward or back without breaking runs.'],
+    ]},
+    { color: 'amber', title: 'Execution assurance', items: [
+      ['Idempotency','Duplicate action detection prevents double-writes to external systems.'],
+      ['Tool evidence','Full input/output logging for every tool call. Attached to the trace.'],
+      ['Action receipts','Cryptographic receipt for each significant action. Offline verifiable.'],
+      ['Audit reports','Exportable reports covering the full event chain for compliance review.'],
+    ]},
+    { color: 'blue', title: 'Gateway abstraction', items: [
+      ['Model gateway registry','Register multiple model providers. Switch without changing agent code.'],
+      ['Fallback records','Automatic fallback when primary provider fails. Route recorded in trace.'],
+      ['Tool gateway registry','Centralise tool endpoints. Version and govern tool access per tenant.'],
+      ['Embedding routes','Dedicated route for embedding calls. Separate quota and fallback policy.'],
+    ]},
+    { color: 'violet', title: 'Enterprise control', items: [
+      ['Tenant hierarchy','Org → workspace → project hierarchy. Isolated data and quota per tenant.'],
+      ['API keys','Scoped API keys per service or operator. Revoke without affecting other keys.'],
+      ['RBAC','Role-based access: admin, operator, viewer. Enforced at control-plane and data plane.'],
+      ['Control-plane audit','Every config change logged with actor, timestamp, and diff. Immutable.'],
+    ]},
+  ];
+  return `
+${header('capabilities')}
+<div class="max-w-5xl mx-auto px-6 py-20">
+  <div class="mb-12 text-center">
+    <h1 class="text-4xl font-bold mb-4">Four capability groups. One runtime layer.</h1>
+    <p class="text-neutral-500 max-w-xl mx-auto">Each group addresses a distinct failure category in production agent systems.</p>
+  </div>
+  <div class="space-y-10">
+    ${sections.map(s => `
+      <div class="border-${s.color}-left pl-6 py-2">
+        <h2 class="text-xl font-bold mb-6 capitalize">${s.title}</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${s.items.map(([n,d]) => `
+            <div class="bg-neutral-50 rounded-xl border border-neutral-200 p-5">
+              <div class="font-semibold mb-1">${n}</div>
+              <div class="text-sm text-neutral-500">${d}</div>
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
+  </div>
+</div>`;
+}
+
+// ─── Architecture ─────────────────────────────────────────────────────────────
+function architecture() {
+  return `
+${header('architecture')}
+<div class="max-w-6xl mx-auto px-6 py-20">
+  <div class="mb-12 text-center">
+    <h1 class="text-4xl font-bold mb-4">A continuity layer above agents, gateways, tools, and storage.</h1>
+    <p class="text-neutral-500 max-w-xl mx-auto">TraceMemory sits between your agent framework and everything else — invisible to end-users, essential to production.</p>
+  </div>
+
+  <!-- Architecture diagram -->
+  <div class="bg-neutral-950 rounded-2xl border border-neutral-700 p-8 mb-16">
+    <div class="text-center mb-6">
+      <div class="inline-block bg-neutral-800 rounded-xl border border-neutral-600 px-6 py-4">
+        <div class="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Agent Applications</div>
+        <div class="flex flex-wrap justify-center gap-2">
+          ${['LangGraph','CrewAI','OpenClaw','Custom'].map(a => `<span class="mono text-xs bg-neutral-700 text-neutral-200 px-2.5 py-1 rounded">${a}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-center mb-2"><div class="text-neutral-600 text-lg">↓</div></div>
+    <div class="text-center mb-2">
+      <div class="inline-block bg-violet-950 rounded-xl border-2 border-violet-600 px-8 py-5 max-w-lg">
+        <div class="text-xs font-bold text-violet-400 uppercase tracking-wider mb-3">TraceMemory Runtime</div>
+        <div class="flex flex-wrap justify-center gap-2">
+          ${['Task contracts','Checkpoints','Tool traces','Drift detection','Receipts'].map(f => `<span class="mono text-xs bg-violet-900 text-violet-200 px-2 py-1 rounded">${f}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-center gap-24 mt-2 mb-2">
+      <div class="text-neutral-600">↙</div><div class="text-neutral-600">↓</div><div class="text-neutral-600">↘</div>
+    </div>
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <div class="bg-neutral-900 rounded-xl border border-neutral-700 p-4 text-center">
+        <div class="text-xs font-bold text-blue-400 uppercase mb-2">Model Gateways</div>
+        <div class="space-y-1">
+          ${['OpenAI-compatible','Anthropic','Gemini','OpenRouter','Ollama','Azure'].map(m => `<div class="mono text-xs text-neutral-400">${m}</div>`).join('')}
+        </div>
+      </div>
+      <div class="bg-neutral-900 rounded-xl border border-neutral-700 p-4 text-center">
+        <div class="text-xs font-bold text-amber-400 uppercase mb-2">Storage</div>
+        <div class="space-y-1">
+          ${['PostgreSQL','Enterprise DB'].map(m => `<div class="mono text-xs text-neutral-400">${m}</div>`).join('')}
+        </div>
+      </div>
+      <div class="bg-neutral-900 rounded-xl border border-neutral-700 p-4 text-center">
+        <div class="text-xs font-bold text-green-400 uppercase mb-2">Tool Gateways</div>
+        <div class="space-y-1">
+          ${['MCP','Internal APIs','CRM','Ticketing','ERP'].map(m => `<div class="mono text-xs text-neutral-400">${m}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Two columns -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-20">
+    <div>
+      <h2 class="text-xl font-bold mb-6">Resilient-agent failures</h2>
+      <div class="space-y-4">
+        ${
+          [
+            ['Rate limits','Automatic backoff, retry, and provider fallback. Run continues without restart.'],
+            ['Provider outages','Switch to secondary model via gateway registry. Failure recorded in trace.'],
+            ['Slow responses','Timeout detection with checkpoint-safe interruption. Resumes on fallback.'],
+            ['Tool failures','Tool error captured as evidence. Agent can retry, skip, or escalate.'],
+            ['Bad intermediate outputs','Checkpoint isolates bad state. Roll back to last clean checkpoint.'],
+            ['Cascading failures','Event chain makes failure propagation visible. Stop and recover at any point.'],
+          ].map(([t,d]) => `
+          <div class="flex gap-3">
+            <div class="w-1.5 flex-shrink-0 mt-1.5 h-1.5 bg-red-400 rounded-full"></div>
+            <div><span class="font-semibold text-sm">${t}</span><p class="text-sm text-neutral-500 mt-0.5">${d}</p></div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div>
+      <h2 class="text-xl font-bold mb-6">Beyond basic recovery</h2>
+      <div class="space-y-4">
+        ${
+          [
+            ['Enterprise tenancy','Full org → workspace → project isolation. One deployment, many teams.'],
+            ['Access control','RBAC enforced at every API boundary. Scoped keys per service.'],
+            ['Duplicate-action protection','Idempotency keys prevent double-writes to billing, CRM, or ticketing.'],
+            ['Execution memory','Lessons from past runs retrieved automatically before new runs start.'],
+            ['Gateway choice','Swap model or tool provider without changing agent code. All logged.'],
+            ['Operational audit','Immutable log of every run, config change, and operator action.'],
+          ].map(([t,d]) => `
+          <div class="flex gap-3">
+            <div class="w-1.5 flex-shrink-0 mt-1.5 h-1.5 bg-violet-600 rounded-full"></div>
+            <div><span class="font-semibold text-sm">${t}</span><p class="text-sm text-neutral-500 mt-0.5">${d}</p></div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Vultr deploy -->
+  <div class="bg-neutral-950 rounded-2xl border border-neutral-700 p-8">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">V</div>
+      <h2 class="text-xl font-bold text-white">Deploy on Vultr Compute</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="space-y-3 text-sm text-neutral-400">
+        ${['TraceMemory API (2× vCPU, 4GB)','PostgreSQL (managed or self-hosted)','Redis for ephemeral state','Nginx reverse proxy','Optional: object storage for receipt archive'].map(l => `<div class="flex items-center gap-2"><div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>${l}</div>`).join('')}
+      </div>
+      <div class="bg-neutral-900 rounded-xl border border-neutral-800 p-4">
+        <pre class="mono text-xs text-green-400"># One-command deploy on Vultr
+curl -fsSL https://get.tracememory.io | bash
+
+# Or use the Vultr Marketplace app
+# Pre-configured PostgreSQL + API + Redis
+# Ready in under 5 minutes</pre>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+// ─── Solutions ────────────────────────────────────────────────────────────────
+function solutionsPage() {
+  const rows = [
+    {num:'01',name:'Support operations',problem:'Agents reading billing records fail mid-session, lose context, and restart — re-running billable API calls and losing resolution history.',benefit:'Checkpoint after each CRM read. Recover without repeating external calls. Drift detection ensures agents never access write-scoped tools during read-only resolutions.'},
+    {num:'02',name:'Compliance review',problem:'Multi-document review agents produce no audit trail, making regulatory sign-off impossible and results unverifiable after the fact.',benefit:'Every document access logged as tool evidence. Signed receipt covers the full review chain. Auditors verify the receipt offline without re-running the agent.'},
+    {num:'03',name:'Finance operations',problem:'Invoice reconciliation agents write partial updates to ERP systems when they time out, leaving financial records in an inconsistent state.',benefit:'Idempotency keys prevent duplicate writes. Checkpoint before every ERP write. On failure, restore to pre-write checkpoint and retry with a fresh provider.'},
+    {num:'04',name:'IT incident response',problem:'Runbook agents escalate, then fail mid-escalation, leaving incidents in unknown states and on-call engineers without clear history.',benefit:'Task contract enforces escalation scope. Each action checkpointed. If the agent fails during notification, recovery resumes at the last safe step — not from scratch.'},
+  ];
+  return `
+${header('solutions')}
+<div class="max-w-5xl mx-auto px-6 py-20">
+  <div class="mb-12 text-center">
+    <h1 class="text-4xl font-bold mb-4">Production patterns for recoverable agents.</h1>
+    <p class="text-neutral-500 max-w-xl mx-auto">Common enterprise agent workflows, and exactly how TraceMemory makes each one production-safe.</p>
+  </div>
+  <div class="divide-y divide-neutral-200 border border-neutral-200 rounded-2xl overflow-hidden">
+    ${rows.map(r => `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-neutral-200">
+        <div class="p-8 bg-neutral-50">
+          <div class="text-xs font-bold text-violet-600 tracking-widest mb-2">${r.num}</div>
+          <div class="font-bold text-lg">${r.name}</div>
+        </div>
+        <div class="p-8">
+          <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2">Problem</div>
+          <p class="text-sm text-neutral-600 leading-relaxed">${r.problem}</p>
+        </div>
+        <div class="p-8">
+          <div class="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">With TraceMemory</div>
+          <p class="text-sm text-neutral-600 leading-relaxed">${r.benefit}</p>
+        </div>
+      </div>`).join('')}
+  </div>
+</div>`;
+}
+
+// ─── Developers ───────────────────────────────────────────────────────────────
+function developers() {
+  const endpoints = [
+    ['POST','/api/tasks/run','Start a new traced agent run with a task contract'],
+    ['POST','/api/tasks/recover','Resume a run from its last clean checkpoint'],
+    ['GET','/api/tasks/{id}/contract','Retrieve the task contract for a run'],
+    ['GET','/api/traces/{id}/drift','Get drift detection results for a trace'],
+    ['POST','/api/traces/{id}/reflect','Trigger reflection on a completed trace'],
+    ['PATCH','/api/reflections/{id}/curate','Approve or reject a generated reflection'],
+    ['GET','/api/lessons/retrieve','Retrieve relevant lessons for a task description'],
+    ['GET','/api/traces/{id}/receipt','Download the signed receipt for a trace'],
+    ['GET','/api/receipts/public-key','Get the public key for receipt verification'],
+    ['GET','/api/demo/state','Get current demo scenario state'],
+    ['DELETE','/api/tasks/{id}','Cancel and clean up a running task'],
+  ];
+  const concepts = [
+    ['Run','A single end-to-end execution of an agent task. Has an ID, contract, events, and outcome.'],
+    ['Task contract','Declared intent, scope, and allowed tools. Defined before execution starts.'],
+    ['Event','An atomic action within a run: tool call, checkpoint, model call, drift check.'],
+    ['Tool trace','Full input/output record for a single tool invocation. Attached to events.'],
+    ['Checkpoint','A snapshot of run state at a significant step. Used for recovery.'],
+    ['Context Health','Real-time score of run quality: drift, error rate, token pressure, latency.'],
+    ['Receipt','Ed25519-signed document covering the complete event chain. Offline verifiable.'],
+  ];
+  return `
+${header('developers')}
+<div class="max-w-6xl mx-auto px-6 py-20">
+  <div class="mb-12">
+    <h1 class="text-4xl font-bold mb-4">Add reliability to long-running agents in minutes.</h1>
+    <p class="text-neutral-500 max-w-xl">Wrap your agent with a single decorator. TraceMemory handles the rest.</p>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+    <div class="bg-neutral-950 rounded-xl border border-neutral-800 p-6">
+      <div class="text-xs text-neutral-400 mono mb-4">python · pip install tracememory</div>
+      <pre class="mono text-xs text-neutral-300 leading-relaxed">import tracememory as tm
+from tracememory import TaskContract
+
+client = tm.Client(base_url="http://localhost:8000")
+
+contract = TaskContract(
+    goal="resolve_support_ticket",
+    allowed_tools=["read_ticket","update_crm","send_email"],
+    scope="support_write",
+    max_steps=20
+)
+
+result = await client.run(
+    agent_fn=your_agent,
+    contract=contract,
+    inputs={"ticket_id": "T-1234"}
+)
+
+print(result.receipt)    # Signed receipt
+print(result.trace_id)   # tm-9e1a7f3b
+print(result.recovered)  # False (or True)</pre>
+    </div>
+    <div>
+      <h2 class="text-xl font-bold mb-4">Integration paths</h2>
+      <div class="space-y-3 mb-8">
+        ${
+          [
+            ['Python SDK','pip install tracememory','green'],
+            ['TypeScript SDK','npm install @tracememory/sdk','blue'],
+            ['OpenClaw','Native plugin — zero config','violet'],
+            ['MCP','Drop-in tool proxy gateway','amber'],
+            ['REST API','Language-agnostic JSON API','gray'],
+          ].map(([t,s,c]) => `
+          <div class="flex items-center justify-between border border-neutral-200 rounded-lg p-4">
+            <span class="font-semibold text-sm">${t}</span>
+            <span class="mono text-xs text-neutral-500 bg-neutral-50 px-2 py-1 rounded">${s}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Core concepts -->
+  <div class="mb-16">
+    <h2 class="text-xl font-bold mb-6">Core concepts</h2>
+    <div class="border border-neutral-200 rounded-xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-neutral-50 border-b border-neutral-200">
+          <tr><th class="text-left px-5 py-3 font-semibold">Concept</th><th class="text-left px-5 py-3 font-semibold text-neutral-500">Description</th></tr>
+        </thead>
+        <tbody class="divide-y divide-neutral-100">
+          ${concepts.map(([c,d]) => `<tr><td class="px-5 py-3 font-mono text-violet-700 font-medium text-xs">${c}</td><td class="px-5 py-3 text-neutral-500">${d}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TypeScript quickstart -->
+  <div class="mb-16">
+    <h2 class="text-xl font-bold mb-4">TypeScript quickstart</h2>
+    <div class="bg-neutral-950 rounded-xl border border-neutral-800 p-6">
+      <div class="text-xs text-neutral-400 mono mb-4">typescript · npm install @tracememory/sdk</div>
+      <pre class="mono text-xs text-neutral-300 leading-relaxed">import { TraceMemory, TaskContract } from '@tracememory/sdk';
+
+const tm = new TraceMemory({ baseUrl: 'http://localhost:8000' });
+
+const contract: TaskContract = {
+  goal: 'resolve_support_ticket',
+  allowedTools: ['read_ticket', 'update_crm'],
+  scope: 'support_write',
+  maxSteps: 20,
+};
+
+const result = await tm.run({
+  agentFn: yourAgent,
+  contract,
+  inputs: { ticketId: 'T-1234' },
+});
+
+console.log(result.receipt);    // Signed receipt object
+console.log(result.traceId);    // 'tm-9e1a7f3b'
+console.log(result.recovered);  // boolean</pre>
+    </div>
+  </div>
+
+  <!-- API Reference -->
+  <div>
+    <h2 class="text-xl font-bold mb-6">API reference</h2>
+    <div class="border border-neutral-200 rounded-xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-neutral-50 border-b border-neutral-200">
+          <tr>
+            <th class="text-left px-5 py-3 font-semibold w-16">Method</th>
+            <th class="text-left px-5 py-3 font-semibold">Endpoint</th>
+            <th class="text-left px-5 py-3 font-semibold text-neutral-500">Description</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-neutral-100">
+          ${endpoints.map(([m,e,d]) => `
+            <tr>
+              <td class="px-5 py-3"><span class="mono text-xs font-bold ${m==='POST'?'text-green-700':m==='GET'?'text-blue-700':'text-amber-700'}">${m}</span></td>
+              <td class="px-5 py-3 mono text-xs text-neutral-700">${e}</td>
+              <td class="px-5 py-3 text-neutral-500 text-xs">${d}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>`;
+}
+
+// ─── Integrations ─────────────────────────────────────────────────────────────
+function integrationsPage() {
+  const categories = [
+    {name:'Model gateways',items:['OpenAI','Anthropic Claude','Google Gemini','OpenRouter','Ollama (local)','Azure OpenAI','AWS Bedrock']},
+    {name:'Tool gateways',items:['MCP (Model Context Protocol)','Internal REST APIs','Webhook receivers','gRPC services']},
+    {name:'Storage',items:['PostgreSQL (recommended)','Supabase','Neon','AWS RDS','Self-hosted PostgreSQL']},
+    {name:'Observability',items:['OpenTelemetry traces','Prometheus metrics','Grafana dashboards','Datadog integration']},
+    {name:'Identity and access',items:['API key auth','JWT / OIDC','OAuth 2.0','SSO via SAML (enterprise)']},
+  ];
+  const roles = [
+    ['Primary','Main model for task execution. Receives full context.','GPT-4o, Claude 3.5'],
+    ['Fallback','Used when primary is unavailable or rate-limited.','GPT-3.5, Haiku'],
+    ['Low-cost','Cheap model for classification and triage tasks.','Haiku, Gemini Flash'],
+    ['Synthesis','Combines outputs from multiple agents or steps.','Claude Opus, GPT-4o'],
+    ['Memory','Embedding model for lesson retrieval.','text-embedding-3-small'],
+  ];
+  return `
+${header('integrations')}
+<div class="max-w-6xl mx-auto px-6 py-20">
+  <div class="mb-12">
+    <h1 class="text-4xl font-bold mb-4">Use the gateways, tools, and storage your enterprise already trusts.</h1>
+    <p class="text-neutral-500 max-w-xl">TraceMemory wraps your existing infrastructure. No migration required.</p>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+    <div class="space-y-8">
+      ${categories.map(c => `
+        <div>
+          <h3 class="font-bold mb-3">${c.name}</h3>
+          <div class="flex flex-wrap gap-2">
+            ${c.items.map(i => `<span class="text-xs bg-neutral-100 text-neutral-700 border border-neutral-200 px-3 py-1.5 rounded-full">${i}</span>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>
+    <div>
+      <h3 class="font-bold mb-4">Model roles</h3>
+      <p class="text-sm text-neutral-500 mb-5">Assign different models to different roles. TraceMemory routes calls and records every routing decision.</p>
+      <div class="border border-neutral-200 rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-neutral-50 border-b border-neutral-200">
+            <tr><th class="text-left px-4 py-3 font-semibold">Role</th><th class="text-left px-4 py-3 font-semibold text-neutral-500">Purpose</th><th class="text-left px-4 py-3 font-semibold text-neutral-500">Examples</th></tr>
+          </thead>
+          <tbody class="divide-y divide-neutral-100">
+            ${roles.map(([r,p,e]) => `
+              <tr>
+                <td class="px-4 py-3 font-semibold text-xs">${r}</td>
+                <td class="px-4 py-3 text-xs text-neutral-500">${p}</td>
+                <td class="px-4 py-3 mono text-xs text-neutral-500">${e}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-6 bg-neutral-50 rounded-xl border border-neutral-200 p-5">
+        <div class="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Gateway config example</div>
+        <pre class="mono text-xs text-neutral-700">gateways:
+  models:
+    primary:   openai/gpt-4o
+    fallback:  anthropic/claude-haiku
+    synthesis: anthropic/claude-opus
+  tools:
+    - name: crm
+      url: https://crm.company.com/mcp
+      auth: bearer</pre>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+// ─── Console ──────────────────────────────────────────────────────────────────
+function consoleView() {
+  const tabs = ['Overview','Runs','Recovery','Checkpoints','Tool Evidence','Model Routes','Memory','Audit','Settings'];
+  return `
+<div class="flex h-screen overflow-hidden bg-neutral-50">
+  <!-- Sidebar -->
+  <aside class="w-64 flex-shrink-0 bg-neutral-950 text-white flex flex-col border-r border-neutral-800">
+    <div class="p-5 border-b border-neutral-800">
+      <div class="flex items-center gap-2 mb-4">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#7c3aed"/><path d="M6 8h12M6 12h8M6 16h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="12" r="2.5" fill="#a78bfa"/></svg>
+        <span class="font-bold">TraceMemory</span>
+      </div>
+      <button onclick="logout()" class="w-full text-xs text-neutral-400 hover:text-white border border-neutral-700 rounded-lg py-1.5 px-3 transition-colors text-left">← Sign out</button>
+    </div>
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+      ${tabs.map((t,i) => `<button class="w-full text-left px-3 py-2 rounded-lg text-sm ${i===0?'bg-violet-600 text-white font-semibold':'text-neutral-400 hover:text-white hover:bg-neutral-800'} transition-colors">${t}</button>`).join('')}
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-y-auto">
+    <div class="p-8 max-w-5xl">
+      <div class="flex items-center gap-3 mb-6">
+        ${badge('Enterprise console','violet')}
+      </div>
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-2xl font-bold">Overview</h1>
+        <button class="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Load live data</button>
+      </div>
+      <p class="text-neutral-500 text-sm mb-8">Real-time view of agent runs, recoveries, and checkpoints across your workspace.</p>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+        ${[['Active runs','3','text-green-600'],['Checkpoints','14','text-violet-600'],['Recovered','2','text-blue-600'],['Gateways','2','text-neutral-700']].map(([l,v,c]) => `
+          <div class="bg-white rounded-xl border border-neutral-200 p-5">
+            <div class="text-2xl font-bold ${c} mb-1">${v}</div>
+            <div class="text-sm text-neutral-500">${l}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Runs table -->
+      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+          <h2 class="font-semibold">Agent runs</h2>
+          ${badge('AUDIT-READY','green')}
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-neutral-50 border-b border-neutral-100">
+            <tr>
+              <th class="text-left px-6 py-3 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Trace ID</th>
+              <th class="text-left px-6 py-3 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Task</th>
+              <th class="text-left px-6 py-3 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
+              <th class="text-left px-6 py-3 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Steps</th>
+              <th class="text-left px-6 py-3 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Started</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-neutral-100">
+            <tr class="hover:bg-neutral-50">
+              <td class="px-6 py-4 mono text-xs text-violet-600">tm-7f2a91c9</td>
+              <td class="px-6 py-4 text-sm">resolve_billing_dispute</td>
+              <td class="px-6 py-4">${badge('RECOVERED','blue')}</td>
+              <td class="px-6 py-4 text-neutral-500">12</td>
+              <td class="px-6 py-4 text-neutral-400 text-xs">2m ago</td>
+            </tr>
+            <tr class="hover:bg-neutral-50">
+              <td class="px-6 py-4 mono text-xs text-violet-600">tm-3b44c0d2</td>
+              <td class="px-6 py-4 text-sm">compliance_review_q4</td>
+              <td class="px-6 py-4">${badge('RUNNING','green')}</td>
+              <td class="px-6 py-4 text-neutral-500">8</td>
+              <td class="px-6 py-4 text-neutral-400 text-xs">4m ago</td>
+            </tr>
+            <tr class="hover:bg-neutral-50">
+              <td class="px-6 py-4 mono text-xs text-violet-600">tm-9e1a7f3b</td>
+              <td class="px-6 py-4 text-sm">invoice_reconciliation</td>
+              <td class="px-6 py-4">${badge('CHECKPOINTED','violet')}</td>
+              <td class="px-6 py-4 text-neutral-500">6</td>
+              <td class="px-6 py-4 text-neutral-400 text-xs">7m ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>`;
+}
+
+// ─── Agent Demo ───────────────────────────────────────────────────────────────
+function agent() {
+  const stages = [
+    { pct:0,  badgeText:'No active run', badgeColor:'gray', msgs:[] },
+    { pct:32, badgeText:'Planning checkpoint', badgeColor:'green', msgs:[
+      {type:'user', text:'Investigate billing dispute for customer acme-corp. Check invoice history, identify discrepancy, draft resolution.'},
+      {type:'plan', label:'PLAN', content:'1. Fetch invoice history (read_only)\n2. Identify discrepancy with billing system\n3. Draft dispute resolution\n4. Update CRM ticket'},
+      {type:'checkpoint', label:'CHECKPOINT', content:'State saved · Step 1/4 · trace: tm-7f2a91c9'},
+    ]},
+    { pct:58, badgeText:'Tool evidence recorded', badgeColor:'green', msgs:[
+      {type:'tool', label:'TOOL EVIDENCE', content:'read_invoice(customer_id="acme-corp") → 3 invoices fetched · 847ms · scope: billing_read_only ✓'},
+      {type:'validation', label:'VALIDATION', content:'Discrepancy found: INV-2024-089 charged $4,200 — contract rate $3,800. Delta: $400.'},
+      {type:'memory', label:'EXECUTION MEMORY', content:'Similar dispute resolved 6 days ago: acme-tier contract rates updated 2024-11-01 — check contract version in CRM.'},
+    ]},
+    { pct:68, badgeText:'Task alignment check', badgeColor:'amber', msgs:[
+      {type:'proposed', label:'PROPOSED ACTION', content:'Tool: update_payment_method · Scope required: billing_write'},
+      {type:'drift', label:'DRIFT DETECTED', content:'⚠ Proposed tool "update_payment_method" requires billing_write. Task contract scope is billing_read_only. Action blocked.'},
+      {type:'realign', label:'REALIGN', content:'✓ Proceeding with allowed action: update_crm_ticket(resolution_draft=…) — within scope.'},
+    ]},
+    { pct:78, badgeText:'Failure recovery', badgeColor:'amber', msgs:[
+      {type:'failure', label:'FAILURE DETECTED', content:'Provider error: openai/gpt-4o → 429 rate limit after 3 retries. Checkpointing current state.'},
+      {type:'fallback', label:'FALLBACK ROUTE', content:'Gateway: switching primary → fallback (anthropic/claude-haiku). Route recorded in trace.'},
+      {type:'recovery', label:'RECOVERY', content:'✓ Run resumed from checkpoint step 3/4 on fallback provider. No steps repeated.'},
+    ]},
+    { pct:100, badgeText:'Completed', badgeColor:'green', msgs:[
+      {type:'version', label:'TASK VERSION', content:'Contract v1.2 applied · 4/4 steps completed · 0 scope violations · 1 recovery event'},
+      {type:'memory', label:'MEMORY APPLIED', content:'Lesson applied: "acme-corp contract rates updated 2024-11-01" — matched with 0.92 confidence.'},
+      {type:'result', label:'RESULT', content:'Resolution drafted: Credit $400 to next invoice. CRM ticket T-8821 updated. Supervisor notified.'},
+      {type:'outcome', label:'OUTCOME', content:'✓ Run completed successfully. Signed receipt issued. Ed25519 · 14 checkpoints · tm-7f2a91c9'},
+    ]},
+  ];
+
+  const runs = [
+    'tm-7f2a91c9 · billing',
+    'tm-3b44c0d2 · compliance',
+    'tm-9e1a7f3b · finance',
+    'tm-1c6d8a2f · support',
+    'tm-4a2c1b8e · incident',
+    'tm-6f9d3c1a · review',
+    'tm-2e7b4f9c · audit',
+    'tm-5d1a8c3e · onboard',
+  ];
+
+  const allSteps = ['Request','Plan','Route','Checkpoint','Tool','Evidence','Interrupt','Fallback','Recover','Version','Memory','Answer'];
+  const activeStepByStage = [0,1,3,6,7,9,11];
+  const activeStep = activeStepByStage[demoStep] || 0;
+
+  const current = stages[demoStep];
+  const allMsgs = stages.slice(0, demoStep+1).flatMap(s => s.msgs);
+
+  function msgHtml(m) {
+    const colors = {
+      user:'bg-neutral-100 text-neutral-800',
+      plan:'bg-blue-50 border-l-4 border-blue-400 text-blue-900',
+      checkpoint:'bg-violet-50 border-l-4 border-violet-500 text-violet-900',
+      tool:'bg-neutral-900 text-green-400',
+      validation:'bg-neutral-50 border border-neutral-200 text-neutral-700',
+      memory:'bg-amber-50 border-l-4 border-amber-400 text-amber-900',
+      proposed:'bg-neutral-50 border border-neutral-200 text-neutral-700',
+      drift:'bg-red-50 border-l-4 border-red-500 text-red-900',
+      realign:'bg-green-50 border-l-4 border-green-500 text-green-900',
+      failure:'bg-orange-50 border-l-4 border-orange-500 text-orange-900',
+      fallback:'bg-blue-50 border-l-4 border-blue-500 text-blue-900',
+      recovery:'bg-green-50 border-l-4 border-green-500 text-green-900',
+      version:'bg-neutral-50 border border-neutral-200 text-neutral-700',
+      result:'bg-white border border-neutral-200 text-neutral-800',
+      outcome:'bg-green-50 border border-green-200 text-green-900',
+    };
+    const cls = colors[m.type] || 'bg-white border text-neutral-800';
+    if (m.type === 'user') return `<div class="flex justify-end mb-3"><div class="max-w-sm bg-violet-600 text-white text-sm rounded-2xl rounded-tr-sm px-4 py-3">${m.text}</div></div>`;
+    return `<div class="mb-3 rounded-xl px-4 py-3 text-xs ${cls}">
+      ${m.label?`<div class="font-bold text-xs opacity-60 mb-1 tracking-wider">${m.label}</div>`:''}
+      <div class="mono leading-relaxed">${m.content}</div>
+    </div>`;
+  }
+
+  const inspectorHtml = inspectorOpen ? `
+    <div class="slide-in fixed right-0 top-0 h-full w-[460px] bg-neutral-950 border-l border-neutral-700 z-50 flex flex-col shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-neutral-700">
+        <span class="font-bold text-white text-sm">TraceMemory Inspector</span>
+        <button onclick="toggleInspector()" class="text-neutral-400 hover:text-white text-lg leading-none">×</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-5 space-y-4">
+        <div class="bg-black rounded-xl border border-neutral-800 p-4">
+          <div class="text-xs text-green-400 mono mb-2">$ tracememory inspect tm-7f2a91c9 --drift</div>
+          <pre class="mono text-xs text-green-300 leading-relaxed">Trace: tm-7f2a91c9
+Contract: resolve_billing_dispute v1.2
+Steps: ${demoStep > 1 ? 14 : 0} recorded
+
+Drift checks:
+  ✓ read_invoice — billing_read_only ✓
+  ✗ update_payment_method — BLOCKED
+    required: billing_write
+    contract: billing_read_only
+  ✓ update_crm_ticket — support_write ✓
+
+Context health: ${current.pct}%
+Recovery events: ${demoStep >= 4 ? 1 : 0}
+Fallback routes: ${demoStep >= 4 ? 1 : 0}</pre>
+        </div>
+        <div class="space-y-3">
+          ${
+            [
+              ['Trace','tm-7f2a91c9'],
+              ['Model route',demoStep>=4?'openai → anthropic (fallback)':'openai/gpt-4o (primary)'],
+              ['Tool evidence',demoStep>=2?'3 calls recorded':'—'],
+              ['Checkpoint',demoStep>=1?'Step '+Math.min(demoStep*2,14)+'/4 saved':'—'],
+              ['Recovery',demoStep>=4?'1 event · step 3/4':'None'],
+              ['Memory',demoStep>=2?'1 lesson applied (0.92)':'—'],
+            ].map(([k,v]) => `
+            <div class="flex justify-between items-center py-2 border-b border-neutral-800">
+              <span class="text-neutral-400 text-xs">${k}</span>
+              <span class="mono text-xs text-neutral-200">${v}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>` : '';
+
+  return `
+<div class="flex h-screen overflow-hidden bg-white">
+  ${inspectorHtml}
+
+  <!-- Sidebar -->
+  <aside class="w-64 flex-shrink-0 bg-neutral-950 text-white flex flex-col border-r border-neutral-800">
+    <div class="p-4 border-b border-neutral-800">
+      <div class="flex items-center gap-2 mb-4 cursor-pointer" onclick="nav('home')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#7c3aed"/><path d="M6 8h12M6 12h8M6 16h10" stroke="white" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="12" r="2.5" fill="#a78bfa"/></svg>
+        <span class="font-bold text-sm">TraceMemory</span>
+      </div>
+      <button onclick="demoStep=0;render()" class="w-full text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-lg py-2 px-3 mb-2 transition-colors font-semibold">+ New run</button>
+      <div class="flex items-center gap-2 bg-neutral-800 rounded-lg px-3 py-2">
+        <svg class="w-3 h-3 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
+        <span class="text-xs text-neutral-400">⌕ Search runs</span>
+      </div>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3">
+      <div class="text-xs font-bold text-neutral-500 uppercase tracking-wider px-2 mb-2">Recent runs</div>
+      ${runs.map((r,i) => `
+        <div class="flex items-center gap-2 px-2 py-2 rounded-lg ${i===0?'bg-neutral-800':''} hover:bg-neutral-800 cursor-pointer transition-colors">
+          <div class="w-1.5 h-1.5 rounded-full ${i===0?'bg-green-400':i===3?'bg-red-400':'bg-neutral-600'} flex-shrink-0"></div>
+          <span class="mono text-xs text-neutral-400 truncate">${r}</span>
+        </div>`).join('')}
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Top bar -->
+    <div class="bg-white border-b border-neutral-200 px-6 py-4 flex-shrink-0">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="font-bold text-lg">${scenario} Agent · Billing Dispute</h2>
+          <p class="text-xs text-neutral-500">Reference app built on TraceMemory runtime continuity infrastructure</p>
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <div class="flex gap-1.5">
+            ${['Support','Compliance','Finance'].map(s => `<button onclick="pickScenario('${s}')" class="text-xs px-3 py-1 rounded-full font-semibold ${scenario===s?'bg-violet-600 text-white':'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'} transition-colors">${s}</button>`).join('')}
+          </div>
+          ${badge(current.badgeText, current.badgeColor)}
+          <div class="flex items-center gap-1.5 bg-neutral-100 rounded-lg px-3 py-1.5 text-xs text-neutral-500 font-medium">
+            <span>Scripted</span>
+            <div class="w-7 h-4 bg-green-500 rounded-full relative cursor-pointer"><div class="absolute right-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow"></div></div>
+          </div>
+          <button onclick="toggleInspector()" class="text-xs border ${inspectorOpen?'border-violet-500 bg-violet-50 text-violet-700':'border-neutral-300 text-neutral-600'} hover:border-violet-400 rounded-lg px-3 py-1.5 font-semibold transition-colors">
+            ${inspectorOpen?'✕ Close':'⊕ Inspector'}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress steps -->
+    <div class="bg-white border-b border-neutral-100 px-6 py-3 flex-shrink-0">
+      <div class="flex items-center gap-0 overflow-x-auto pb-1">
+        ${allSteps.map((s,i) => {
+          const isActive = i === activeStep;
+          const isDone = i < activeStep || demoStep === 5;
+          let cls = 'text-neutral-400';
+          let dot = `<div class="w-4 h-4 rounded-full border-2 border-neutral-300 flex-shrink-0"></div>`;
+          if (isDone) { cls='text-green-600'; dot=`<div class="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div>`; }
+          if (isActive && demoStep < 5) { cls='text-neutral-900 font-bold'; dot=`<div class="w-4 h-4 rounded-full bg-neutral-900 flex-shrink-0"></div>`; }
+          return `<div class="flex items-center gap-1 flex-shrink-0">
+            <div class="flex items-center gap-1.5 ${cls}">
+              ${dot}
+              <span class="text-xs whitespace-nowrap">${s}</span>
+            </div>
+            ${i<allSteps.length-1?`<div class="w-5 h-px bg-neutral-200 mx-1 flex-shrink-0"></div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+      <!-- Progress bar -->
+      <div class="mt-2 w-full bg-neutral-100 rounded-full h-1">
+        <div class="bg-green-500 h-1 rounded-full transition-all duration-500" style="width:${current.pct}%"></div>
+      </div>
+    </div>
+
+    <!-- Chat area -->
+    <div id="chat-area" class="flex-1 overflow-y-auto p-6 space-y-0">
+      ${demoStep === 0 ? `
+        <div class="h-full flex items-center justify-center">
+          <div class="text-center">
+            <div class="w-16 h-16 bg-neutral-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            </div>
+            <h3 class="font-bold text-lg mb-2">Start investigation</h3>
+            <p class="text-sm text-neutral-500 mb-6">Run the demo to see drift detection, recovery, and signed receipts in action.</p>
+            <button onclick="advanceStage()" class="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">Begin demo →</button>
+          </div>
+        </div>` :
+        allMsgs.map(m => msgHtml(m)).join('')
+      }
+      ${demoStep >= 4 ? `<div class="pt-2"><button onclick="window.alert('Receipt download simulated. Ed25519 signature verified.')" class="text-xs border border-neutral-300 hover:border-violet-400 hover:text-violet-700 text-neutral-600 rounded-lg px-4 py-2 font-medium transition-colors">⤓ Signed receipt</button></div>` : ''}
+    </div>
+
+    <!-- Input bar -->
+    <div class="bg-white border-t border-neutral-200 px-6 py-4 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-400">
+          ${demoStep === 0 ? 'Type a task or click Begin demo →' : demoStep < 5 ? 'Demo in progress — click advance to continue…' : 'Run complete. Start a new run to try again.'}
+        </div>
+        <button onclick="advanceStage()" ${demoStep>=5?'disabled':''} class="w-10 h-10 bg-violet-600 ${demoStep>=5?'opacity-40 cursor-not-allowed':'hover:bg-violet-700'} text-white rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      ${demoStep > 0 && demoStep < 5 ? `<div class="mt-2 text-center"><button onclick="advanceStage()" class="text-xs text-violet-600 hover:text-violet-700 font-medium">Advance to next stage (${demoStep+1}/5) →</button></div>` : ''}
+    </div>
+  </div>
+</div>`;
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  if (page === 'home') app.innerHTML = home();
+  else if (page === 'capabilities') app.innerHTML = capabilities();
+  else if (page === 'architecture') app.innerHTML = architecture();
+  else if (page === 'solutions') app.innerHTML = solutionsPage();
+  else if (page === 'developers') app.innerHTML = developers();
+  else if (page === 'integrations') app.innerHTML = integrationsPage();
+  else if (page === 'console') app.innerHTML = consoleView();
+  else if (page === 'agent') app.innerHTML = agent();
+  else app.innerHTML = home();
+}
+
+render();
+</script>
+</body>
+</html>
