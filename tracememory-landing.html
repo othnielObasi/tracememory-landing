@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TraceMemory — Runtime continuity for production AI agents</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-mono { font-family: 'Geist Mono', monospace; }
+    .hero-bg { background: radial-gradient(ellipse 80% 60% at 50% -10%, #ede9fe 0%, #fff 60%); }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .step-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fff; }
+    .step-card.failure { border-color: #fed7aa; background: #fff7ed; }
+    .step-card.restore  { border-color: #bbf7d0; background: #f0fdf4; }
+    .connector { color: #cbd5e1; font-size: 18px; align-self: center; }
+    @keyframes fade-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fade-in .5s ease-out both; }
+    @keyframes pulse-dot { 0%,100% { box-shadow: 0 0 0 0 rgba(52,211,153,.5); } 70% { box-shadow: 0 0 0 6px rgba(52,211,153,0); } }
+    .live-dot { width:8px; height:8px; border-radius:50%; background:#34d399; animation: pulse-dot 1.8s infinite; display:inline-block; }
+    .code-block { background: #0a0a0a; border-radius: 12px; padding: 20px; font-family: 'Geist Mono', monospace; font-size: 13px; line-height: 1.7; color: #e5e5e5; overflow-x: auto; }
+    .dot-red   { width:10px; height:10px; border-radius:50%; background:#ff5f57; }
+    .dot-amber { width:10px; height:10px; border-radius:50%; background:#febc2e; }
+    .dot-green { width:10px; height:10px; border-radius:50%; background:#28c840; }
+  </style>
+</head>
+<body class="text-neutral-950 bg-white">
+
+<!-- NAV -->
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5 flex items-center justify-between h-[72px]">
+    <a href="#" class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="white"/><rect x="9" y="2" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="2" y="9" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="9" y="9" width="5" height="5" rx="1" fill="white"/></svg>
+      </div>
+      <span class="font-bold text-[15px] tracking-tight">TraceMemory</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-neutral-500">
+      <a href="#" class="hover:text-neutral-900 transition-colors">Capabilities</a>
+      <a href="#" class="hover:text-neutral-900 transition-colors">Architecture</a>
+      <a href="#" class="hover:text-neutral-900 transition-colors">Solutions</a>
+      <a href="#" class="hover:text-neutral-900 transition-colors">Developers</a>
+      <a href="#" class="hover:text-neutral-900 transition-colors">Integrations</a>
+    </nav>
+    <div class="flex items-center gap-4">
+      <a href="#" class="text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors">Sign in</a>
+      <a href="#demo" class="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors">Run Demo</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero-bg pt-24 pb-16 text-center">
+  <div class="mx-auto max-w-5xl px-5 fade-in">
+    <div class="mb-6 flex justify-center gap-2 flex-wrap">
+      <span class="pill bg-violet-50 text-violet-700 border border-violet-100">RAISE Hackathon × Vultr</span>
+      <a href="https://github.com/othnielObasi/tracememory-landing" class="pill bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors">Open Source ↗</a>
+    </div>
+    <h1 class="text-[clamp(2.8rem,8vw,5.5rem)] font-black leading-[.92] tracking-[-0.05em] text-neutral-950 mb-8">
+      Your agents fail silently,<br>wander off-task,<br>and leave no proof<br>they ran correctly.
+    </h1>
+    <p class="text-lg text-neutral-500 leading-8 max-w-2xl mx-auto mb-10">
+      TraceMemory fixes all three — recovery, drift detection, and cryptographic receipts for any agent, any vendor. No lock-in. No rewrite.
+    </p>
+    <div class="flex justify-center gap-3 flex-wrap mb-6">
+      <a href="#demo" class="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-3 rounded-full transition-colors text-sm">See drift detection live</a>
+      <a href="https://github.com/othnielObasi/tracememory-landing" class="bg-white hover:bg-neutral-50 text-neutral-900 font-semibold px-6 py-3 rounded-full border border-neutral-200 transition-colors text-sm">View on GitHub</a>
+    </div>
+    <div class="flex justify-center gap-6 flex-wrap text-xs text-neutral-400 font-medium">
+      <span>✦ Works above OpenAI, Anthropic, or any other vendor</span>
+      <span>✦ Run fully self-hosted for sensitive data, or managed in the cloud — same engine, on any PostgreSQL.</span>
+    </div>
+  </div>
+
+  <!-- Console widget -->
+  <div class="mx-auto mt-14 max-w-4xl px-5">
+    <div class="bg-white rounded-2xl border border-neutral-200 shadow-xl shadow-neutral-950/5 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-100 bg-neutral-50">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-sm font-semibold text-neutral-700">TraceMemory Console</span>
+          <span class="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">
+            <span class="live-dot"></span> LIVE
+          </span>
+        </div>
+        <span class="font-mono text-xs text-neutral-400">trace-id &nbsp;tm-7f2a91c9-4e8d-8b2c-9d1a-8f3e2b7c8d9e</span>
+      </div>
+      <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-neutral-100">
+        <div class="p-5">
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-bold">Active Traces</span>
+            <span class="text-xs text-neutral-400">4 running</span>
+          </div>
+          <div class="text-xs text-neutral-400 grid grid-cols-4 gap-2 mb-2 font-semibold uppercase tracking-wider pb-2 border-b border-neutral-100">
+            <span>Trace ID</span><span>Status</span><span>Checkpoints</span><span>Last checkpoint</span>
+          </div>
+          <div class="space-y-3 text-xs">
+            <div>
+              <div class="grid grid-cols-4 gap-2 items-center">
+                <span class="font-mono font-semibold text-neutral-700">tm-7f2a91c9</span>
+                <span class="bg-violet-100 text-violet-700 font-bold px-2 py-0.5 rounded-full text-center">RUNNING</span>
+                <span class="text-neutral-500">12</span>
+                <span class="text-neutral-400">12s ago</span>
+              </div>
+              <div class="mt-1.5 h-1 bg-neutral-100 rounded-full overflow-hidden"><div class="h-full bg-violet-500 rounded-full" style="width:65%"></div></div>
+            </div>
+            <div class="grid grid-cols-4 gap-2 items-center">
+              <span class="font-mono font-semibold text-neutral-700">tm-3b44c0d2</span>
+              <span class="bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full text-center">RECOVERED</span>
+              <span class="text-neutral-500">8</span><span class="text-neutral-400">1m ago</span>
+            </div>
+            <div class="grid grid-cols-4 gap-2 items-center">
+              <span class="font-mono font-semibold text-neutral-700">tm-9e1a7f3b</span>
+              <span class="bg-neutral-100 text-neutral-500 font-bold px-2 py-0.5 rounded-full text-center">COMPLETED</span>
+              <span class="text-neutral-500">14</span><span class="text-neutral-400">6m ago</span>
+            </div>
+            <div class="grid grid-cols-4 gap-2 items-center">
+              <span class="font-mono font-semibold text-neutral-700">tm-1c6d8a2f</span>
+              <span class="bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full text-center">FLAGGED</span>
+              <span class="text-neutral-500">3</span><span class="text-neutral-400">18s ago</span>
+            </div>
+          </div>
+        </div>
+        <div class="divide-y divide-neutral-100">
+          <div class="p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-sm font-bold">Last Drift Check</span>
+              <span class="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">PASS</span>
+            </div>
+            <div class="space-y-1.5 text-xs text-neutral-500">
+              <div><span class="text-neutral-400">Checked action</span><br><span class="font-mono font-semibold text-neutral-700">fetch_customer_data</span></div>
+              <div><span class="text-neutral-400">Contract field</span><br><span class="font-mono text-neutral-600">scope: billing_read_only</span></div>
+            </div>
+          </div>
+          <div class="p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-sm font-bold">Latest Receipt</span>
+              <span class="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">VERIFIED</span>
+            </div>
+            <div class="space-y-1.5 text-xs text-neutral-500">
+              <div><span class="text-neutral-400">Signature</span><br><span class="font-mono font-semibold text-neutral-700">7p9Zx… Ed25519</span></div>
+              <div><span class="text-neutral-400">checkpoints_count</span><br><span class="font-mono text-neutral-700">14</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOUR PILLARS -->
+<section class="py-16 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div class="step-card border-t-2 border-t-violet-400"><p class="font-mono text-xs font-bold text-violet-400 mb-3">01</p><h3 class="font-bold text-base mb-2">Recoverable</h3><p class="text-sm text-neutral-500 leading-6">Restores interrupted runs from durable checkpoints without repeating completed external actions.</p></div>
+    <div class="step-card border-t-2 border-t-violet-400"><p class="font-mono text-xs font-bold text-violet-400 mb-3">02</p><h3 class="font-bold text-base mb-2">On-task</h3><p class="text-sm text-neutral-500 leading-6">Drift detection catches an agent wandering off its task contract before damage is done.</p></div>
+    <div class="step-card border-t-2 border-t-violet-400"><p class="font-mono text-xs font-bold text-violet-400 mb-3">03</p><h3 class="font-bold text-base mb-2">Provable</h3><p class="text-sm text-neutral-500 leading-6">Every run becomes an Ed25519-signed receipt, verifiable offline.</p></div>
+    <div class="step-card border-t-2 border-t-violet-400"><p class="font-mono text-xs font-bold text-violet-400 mb-3">04</p><h3 class="font-bold text-base mb-2">Self-improving</h3><p class="text-sm text-neutral-500 leading-6">Each run produces a signed lesson so the next run starts smarter.</p></div>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section class="py-20 bg-neutral-50 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5">
+    <div class="text-center mb-12">
+      <h2 class="text-4xl font-black tracking-tight mb-3">The full continuity loop</h2>
+      <p class="text-neutral-500 text-base max-w-xl mx-auto">TraceMemory handles the infrastructure gap between model inference and task completion.</p>
+    </div>
+    <div class="flex items-stretch gap-2 mb-4 overflow-x-auto pb-2">
+      <div class="step-card flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-violet-400 mb-2">01</p><p class="text-sm font-bold mb-1">Task contract</p><p class="text-xs text-neutral-400">Define goal + approved scope</p></div>
+      <span class="connector">›</span>
+      <div class="step-card flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-violet-400 mb-2">02</p><p class="text-sm font-bold mb-1">Tool traces</p><p class="text-xs text-neutral-400">Every action logged with evidence</p></div>
+      <span class="connector">›</span>
+      <div class="step-card flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-violet-400 mb-2">03</p><p class="text-sm font-bold mb-1">Checkpoint</p><p class="text-xs text-neutral-400">Trusted state saved to PostgreSQL</p></div>
+      <span class="connector">›</span>
+      <div class="step-card flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-violet-400 mb-2">04</p><p class="text-sm font-bold mb-1">Drift check</p><p class="text-xs text-neutral-400">Action judged vs. contract</p></div>
+    </div>
+    <div class="flex items-stretch gap-2 mb-8 overflow-x-auto pb-2">
+      <div class="step-card failure flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-orange-400 mb-2">05</p><p class="text-sm font-bold mb-1 text-orange-700">Failure</p><p class="text-xs text-orange-500">Worker interrupted or provider timeout</p></div>
+      <span class="connector">›</span>
+      <div class="step-card restore flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-emerald-500 mb-2">06</p><p class="text-sm font-bold mb-1 text-emerald-700">Restore</p><p class="text-xs text-emerald-600">Resume from last trusted checkpoint</p></div>
+      <span class="connector">›</span>
+      <div class="step-card flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-violet-400 mb-2">07</p><p class="text-sm font-bold mb-1">Lesson learned</p><p class="text-xs text-neutral-400">Run reflected + curated</p></div>
+      <span class="connector">›</span>
+      <div class="step-card flex-1 min-w-[150px]"><p class="font-mono text-[10px] font-bold text-violet-400 mb-2">08</p><p class="text-sm font-bold mb-1">Signed receipt</p><p class="text-xs text-neutral-400">Ed25519-signed export</p></div>
+    </div>
+    <p class="text-center text-sm text-neutral-500"><strong class="text-neutral-800">Observability</strong> shows what happened after failure. <strong class="text-violet-600">TraceMemory</strong> keeps the run recoverable.</p>
+  </div>
+</section>
+
+<!-- DEMO CALLOUT -->
+<section id="demo" class="py-16 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5">
+    <div class="bg-neutral-950 rounded-2xl p-8 md:p-12 grid md:grid-cols-2 gap-10 items-center">
+      <div>
+        <h2 class="text-3xl font-black text-white mb-4">One click. No keys.</h2>
+        <p class="text-neutral-400 text-sm leading-7 mb-6">Experience agent recovery and drift detection in under 60 seconds. Our demo environment mocks model responses and tool execution so you can audit the logic immediately.</p>
+        <a href="#" class="inline-block bg-violet-600 hover:bg-violet-500 text-white font-semibold px-6 py-3 rounded-full text-sm transition-colors">Launch Local Demo</a>
+      </div>
+      <div>
+        <div class="code-block">
+          <div class="flex gap-1.5 mb-4"><span class="dot-red"></span><span class="dot-amber"></span><span class="dot-green"></span></div>
+          <div class="text-emerald-400 font-semibold mb-3">docker compose up --build</div>
+          <div class="flex flex-wrap gap-2 mt-4">
+            <span class="bg-white/10 text-neutral-300 text-[11px] font-mono px-2.5 py-1 rounded">DEMO_MODE=true</span>
+            <span class="bg-white/10 text-neutral-300 text-[11px] font-mono px-2.5 py-1 rounded">DEFAULT_MODEL_GATEWAY=mock</span>
+            <span class="bg-white/10 text-neutral-300 text-[11px] font-mono px-2.5 py-1 rounded">AUTH_REQUIRED=false</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INTEGRATED IN MINUTES -->
+<section class="py-20 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5 grid md:grid-cols-2 gap-14 items-center">
+    <div>
+      <div class="code-block">
+        <div class="flex gap-1.5 mb-4"><span class="dot-red"></span><span class="dot-amber"></span><span class="dot-green"></span></div>
+        <pre class="text-sm leading-7 whitespace-pre-wrap"><span style="color:#a78bfa">from</span> <span style="color:#34d399">tracememory</span> <span style="color:#a78bfa">import</span> TraceMemoryClient
+client = TraceMemoryClient(api_key=<span style="color:#fcd34d">'tm_live_x2'</span>)
+session = client.create_session(
+    agent_id=<span style="color:#fcd34d">'finance-v4'</span>
+)
+<span style="color:#a78bfa">with</span> session.checkpoint(<span style="color:#fcd34d">'reasoning'</span>) <span style="color:#a78bfa">as</span> cp:
+    agent.run_logic(cp)</pre>
+      </div>
+    </div>
+    <div>
+      <h2 class="text-4xl font-black tracking-tight mb-4">Integrated in minutes</h2>
+      <p class="text-neutral-500 text-base leading-7 mb-8">Drop into any existing agent — no rewrite required. Works with the agent you already have: OpenClaw, LangGraph, CrewAI, or any REST-callable agent.</p>
+      <ul class="space-y-3">
+        <li class="flex items-start gap-3 text-sm text-neutral-600"><span class="mt-1 w-2 h-2 rounded-sm bg-violet-500 flex-shrink-0"></span><span><strong class="text-neutral-900">Python SDK</strong> — Natively integrated checkpointing context managers</span></li>
+        <li class="flex items-start gap-3 text-sm text-neutral-600"><span class="mt-1 w-2 h-2 rounded-sm bg-violet-500 flex-shrink-0"></span><span><strong class="text-neutral-900">TypeScript SDK</strong> — Promise-based session recovery for Node/Edge environments</span></li>
+        <li class="flex items-start gap-3 text-sm text-neutral-600"><span class="mt-1 w-2 h-2 rounded-sm bg-violet-500 flex-shrink-0"></span><span><strong class="text-neutral-900">OpenClaw plugin</strong> — One-line continuity for the leading agent framework</span></li>
+        <li class="flex items-start gap-3 text-sm text-neutral-600"><span class="mt-1 w-2 h-2 rounded-sm bg-violet-500 flex-shrink-0"></span><span><strong class="text-neutral-900">MCP/Tool Gateway</strong> — Standard Model Context Protocol implementation</span></li>
+        <li class="flex items-start gap-3 text-sm text-neutral-600"><span class="mt-1 w-2 h-2 rounded-sm bg-violet-500 flex-shrink-0"></span><span><strong class="text-neutral-900">REST API</strong> — Language-agnostic state management and audits</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- SIGNED RECEIPTS -->
+<section class="py-20 bg-neutral-50 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5 grid md:grid-cols-2 gap-14 items-start">
+    <div>
+      <span class="pill bg-violet-50 text-violet-600 border border-violet-100 mb-5 inline-block">PROVABILITY</span>
+      <h2 class="text-4xl font-black tracking-tight mb-5">A receipt you can verify yourself, offline.</h2>
+      <p class="text-neutral-500 text-base leading-7 mb-8">Every completed run produces a signed receipt — task contract, tool evidence, checkpoints, recovery events. Download it and verify it on your own machine, without trusting the server.</p>
+      <div class="code-block">
+        <div class="flex gap-1.5 mb-4"><span class="dot-red"></span><span class="dot-amber"></span><span class="dot-green"></span></div>
+        <div class="text-neutral-400 text-xs mb-1">$ python3 tools/verify_receipt.py receipt.json</div>
+        <div class="text-emerald-400 text-xs">&gt; content hash MATCH</div>
+        <div class="text-emerald-400 text-xs">&gt; Ed25519 signature VALID</div>
+      </div>
+    </div>
+    <div class="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm">
+      <div class="flex items-center justify-between mb-5">
+        <span class="text-xs font-bold uppercase tracking-wider text-neutral-400">SIGNED RECEIPT</span>
+        <span class="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">VALID</span>
+      </div>
+      <div class="space-y-4 text-sm">
+        <div><p class="text-xs text-neutral-400 mb-1">Trace ID</p><p class="font-mono font-semibold">tr_98d7…f2a1</p></div>
+        <div><p class="text-xs text-neutral-400 mb-1">Signature</p><p class="font-mono text-neutral-600">0x5f29c…85e14</p></div>
+        <div class="pt-3 border-t border-neutral-100 flex items-center gap-2 text-emerald-600 text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Integrity check passed
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STAY ON TASK -->
+<section class="py-20 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5 grid md:grid-cols-2 gap-14 items-center">
+    <div class="bg-white border border-neutral-200 rounded-2xl p-8 relative">
+      <div class="absolute left-0 top-0 bottom-0 w-1 bg-violet-500 rounded-l-2xl"></div>
+      <div class="flex items-center gap-4 flex-wrap">
+        <div class="border-2 border-neutral-800 rounded-xl p-4 text-xs">
+          <p class="font-mono font-bold mb-2">TASK_CONTRACT</p>
+          <p class="text-neutral-400 font-mono">Allowed calls:<br>/api/search<br>/api/submit</p>
+        </div>
+        <span class="text-2xl text-neutral-300">——›</span>
+        <div class="border-2 border-neutral-800 rounded-xl p-4 text-xs">
+          <p class="font-mono font-bold mb-2">AGENT_ACTION</p>
+          <p class="text-neutral-400 font-mono">Observed:<br>/internal/docs<br>/internal/api</p>
+        </div>
+      </div>
+      <div class="mt-4 text-center">
+        <span class="bg-red-100 text-red-600 text-xs font-bold px-3 py-1.5 rounded-full">FLAGGED: DRIFT</span>
+      </div>
+    </div>
+    <div>
+      <span class="pill bg-amber-50 text-amber-700 border border-amber-100 mb-5 inline-block">SAFETY</span>
+      <h2 class="text-4xl font-black tracking-tight mb-5">Stay on task</h2>
+      <p class="text-neutral-500 text-base leading-7 mb-4">Before the run starts, you define what the agent is allowed to do. If it goes off-task, TraceMemory catches it before any damage is done.</p>
+      <p class="text-neutral-500 text-base leading-7 mb-6">TraceMemory monitors tool call sequences against the task contract in real-time. If the agent starts crawling internal docs it shouldn't, we pause the run.</p>
+      <div class="flex gap-2 flex-wrap">
+        <span class="font-mono text-xs bg-neutral-100 text-neutral-600 px-3 py-1.5 rounded-full">/drift-check</span>
+        <span class="font-mono text-xs bg-neutral-100 text-neutral-600 px-3 py-1.5 rounded-full">/tasks/contract</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SELF-IMPROVING -->
+<section class="py-20 bg-neutral-50 border-t border-neutral-100">
+  <div class="mx-auto max-w-6xl px-5 text-center">
+    <span class="pill bg-violet-50 text-violet-600 border border-violet-100 mb-5 inline-block">LEARNING</span>
+    <h2 class="text-4xl font-black tracking-tight mb-4">Autonomous self-improvement</h2>
+    <p class="text-neutral-500 text-base max-w-xl mx-auto mb-12">Lessons are signed and stored with full provenance. Future runs retrieve relevant lessons automatically.</p>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 text-left">
+      <div class="bg-white rounded-2xl border border-neutral-200 p-6"><p class="text-sm font-bold mb-1">Reflect</p><p class="font-mono text-xs text-violet-500 mb-3">/api/traces/{id}/reflect</p><p class="text-sm text-neutral-500 leading-6">Agent analyzes its own successes and failures after every task completion.</p></div>
+      <div class="bg-white rounded-2xl border border-neutral-200 p-6"><p class="text-sm font-bold mb-1">Curate</p><p class="font-mono text-xs text-violet-500 mb-3">/api/reflections/{id}/curate</p><p class="text-sm text-neutral-500 leading-6">Human-in-the-loop or automated supervisor promotes key insights into Signed Lessons.</p></div>
+      <div class="bg-white rounded-2xl border border-neutral-200 p-6"><p class="text-sm font-bold mb-1">Retrieve</p><p class="font-mono text-xs text-violet-500 mb-3">/api/lessons/retrieve</p><p class="text-sm text-neutral-500 leading-6">Future runs semantically search the lesson database before starting a new task.</p></div>
+      <div class="bg-violet-50 rounded-2xl border border-violet-100 p-6"><p class="font-mono text-[10px] font-bold text-violet-500 uppercase tracking-wider mb-3">EXAMPLE LESSON</p><p class="text-xs text-neutral-700 leading-6 mb-3">"Always verify tool output before calling /api/submit. Previous run failed at step 4 because submit was called with unvalidated data — caused task contract violation."</p><p class="text-[11px] text-neutral-400">Injected automatically into next run via POST /api/lessons/retrieve.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-neutral-950 text-neutral-400 pt-16 pb-8">
+  <div class="mx-auto max-w-6xl px-5">
+    <div class="grid md:grid-cols-4 gap-10 mb-12">
+      <div class="md:col-span-1">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="white"/><rect x="9" y="2" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="2" y="9" width="5" height="5" rx="1" fill="white" opacity=".6"/><rect x="9" y="9" width="5" height="5" rx="1" fill="white"/></svg>
+          </div>
+          <span class="font-bold text-white text-[15px]">TraceMemory</span>
+        </div>
+        <p class="text-sm leading-6">Keeps long-running agents recoverable, on-task, provable, and self-improving.</p>
+      </div>
+      <div><p class="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4">Product</p><ul class="space-y-2 text-sm"><li><a href="#" class="hover:text-white transition-colors">Docs</a></li><li><a href="#" class="hover:text-white transition-colors">API</a></li><li><a href="#" class="hover:text-white transition-colors">Console</a></li></ul></div>
+      <div><p class="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4">Project</p><ul class="space-y-2 text-sm"><li><a href="https://github.com/othnielObasi/tracememory-landing" class="hover:text-white transition-colors">GitHub</a></li><li><a href="#" class="hover:text-white transition-colors">Hackathon</a></li><li><a href="#" class="hover:text-white transition-colors">Apache-2.0</a></li></ul></div>
+      <div><p class="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-4">Built for</p><ul class="space-y-2 text-sm"><li><a href="#" class="hover:text-white transition-colors">RAISE</a></li><li><a href="#" class="hover:text-white transition-colors">Vultr</a></li><li><a href="#" class="hover:text-white transition-colors">Scale</a></li></ul></div>
+    </div>
+    <div class="border-t border-neutral-800 pt-8 flex flex-wrap justify-between gap-3 text-xs">
+      <span>© 2026 TraceMemory · Built for RAISE Hackathon × Vultr</span>
+      <span>All demo data is synthetic</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
